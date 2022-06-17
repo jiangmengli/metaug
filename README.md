@@ -30,7 +30,7 @@ Readers can change hyperparameters directly in code or bash script
 
 ## Checkpoint
 
-We provide the checkpoint in `model_path`
+We provide the checkpoint in `https://drive.google.com/file/d/1uClfQ3u_3U3Kag-a0SSs2LRRI3qW4OA6/view?usp=sharing`
 
 ## Citation
 
