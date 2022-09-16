@@ -1,5 +1,7 @@
 # MetAug
 
+This paper is accepted by ICML2022.
+
 ### Install the PyTorch based environment for MetAug. 
 ```bash
 # Create a conda environment
@@ -35,6 +37,15 @@ We provide the checkpoint in `https://drive.google.com/file/d/1uClfQ3u_3U3Kag-a0
 ## Citation
 
 If you find this repo useful for your research, please consider citing the paper
+```
+@article{li2022metaug,
+  title={MetAug: Contrastive Learning via Meta Feature Augmentation},
+  author={Li, Jiangmeng and Qiang, Wenwen and Zheng, Changwen and Su, Bing and Xiong, Hui},
+  journal={arXiv preprint arXiv:2203.05119},
+  year={2022}
+}
+```
+or
 ```
 @inproceedings{jml2022metaug,
   author    = {Jiangmeng Li and
