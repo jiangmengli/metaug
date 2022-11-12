@@ -426,6 +426,20 @@ def train(epoch, train_loader, model, contrast, criterion_gh, optimizer, l_mtgen
                                                                 out_ori2ab,
                                                                 opt.margin_type)
 
+        # backward
+        if opt.amp:
+            with amp.scale_loss(loss, l_mtgen_op) as scaled_loss:
+                scaled_loss.backward()
+        else:
+            loss.backward()
+        l_mtgen_op.step()
+        ab_mtgen_op.step()
+        ori_mtgen_op.step()
+
+        l_mtgen_op.zero_grad()
+        ab_mtgen_op.zero_grad()
+        ori_mtgen_op.zero_grad()
+
         feat_l, feat_ab, feat_ori = model(inputs, False)
 
         mt_feat_l = l_mtgen(feat_l, False)
