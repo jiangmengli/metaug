@@ -18,8 +18,8 @@ from collections import OrderedDict
 
 from util import adjust_learning_rate, AverageMeter, margin_injection_loss_calc
 
-from models.alexnet_MetAug import MyAlexNetCMC
-from models.alexnet_MetAug import MyMetaGenNet
+from models.alexnet_MetAug2 import MyAlexNetCMC
+from models.alexnet_MetAug2 import MyMetaGenNet
 from NCE.NCEAverage_MetAug import NCEAverage
 from NCE.NCECriterion_MetAug import CircleLoss
 
@@ -315,6 +315,116 @@ def train(epoch, train_loader, model, contrast, criterion_gh, optimizer, l_mtgen
         l_mtgen_op.zero_grad()
         ab_mtgen_op.zero_grad()
         ori_mtgen_op.zero_grad()
+
+        feat_l, feat_ab, feat_ori = model(inputs, False)
+
+        mt_feat_l = l_mtgen(feat_l, False)
+        mt_feat_ab = ab_mtgen(feat_ab, False)
+        mt_feat_ori = ori_mtgen(feat_ori, False)
+
+        # ori loss calc
+        out_ab2l, out_l2ab, out_ori2l, out_l2ori, out_ab2ori, out_ori2ab = contrast(feat_l, feat_ab, feat_ori, index)
+
+        loss = criterion_gh(out_ab2l, out_l2ab, out_ori2l, out_l2ori, out_ab2ori, out_ori2ab)
+
+        # aug loss calc
+        mtl_out_ab2l, mtl_out_l2ab, mtl_out_ori2l, mtl_out_l2ori, out_ab2ori, out_ori2ab = contrast(mt_feat_l, feat_ab,
+                                                                                                    feat_ori, index,
+                                                                                                    updatemem=False)
+        loss += opt.mt_loss_hp * criterion_gh(mtl_out_ab2l, mtl_out_l2ab, mtl_out_ori2l, mtl_out_l2ori, out_ab2ori,
+                                              out_ori2ab)
+        mtab_out_ab2l, mtab_out_l2ab, out_ori2l, out_l2ori, mtab_out_ab2ori, mtab_out_ori2ab = contrast(feat_l,
+                                                                                                        mt_feat_ab,
+                                                                                                        feat_ori, index,
+                                                                                                        updatemem=False)
+        loss += opt.mt_loss_hp * criterion_gh(mtab_out_ab2l, mtab_out_l2ab, out_ori2l, out_l2ori, mtab_out_ab2ori,
+                                              mtab_out_ori2ab)
+        out_ab2l, out_l2ab, mtori_out_ori2l, mtori_out_l2ori, mtori_out_ab2ori, mtori_out_ori2ab = contrast(feat_l,
+                                                                                                            feat_ab,
+                                                                                                            mt_feat_ori,
+                                                                                                            index,
+                                                                                                            updatemem=False)
+        loss += opt.mt_loss_hp * criterion_gh(out_ab2l, out_l2ab, mtori_out_ori2l, mtori_out_l2ori, mtori_out_ab2ori,
+                                              mtori_out_ori2ab)
+        mt_out_ab2l, mt_out_l2ab, mt_out_ori2l, mt_out_l2ori, mt_out_ab2ori, mt_out_ori2ab = contrast(mt_feat_l,
+                                                                                                      mt_feat_ab,
+                                                                                                      mt_feat_ori,
+                                                                                                      index,
+                                                                                                      updatemem=False)
+        loss += opt.mt_loss_hp * criterion_gh(mt_out_ab2l, mt_out_l2ab, mt_out_ori2l, mt_out_l2ori, mt_out_ab2ori,
+                                              mt_out_ori2ab)
+
+        # margin-injection
+        if opt.margin_injection == 1:
+            loss += opt.mj_loss_hp * margin_injection_loss_calc(mtl_out_ab2l, mtl_out_l2ab, mtl_out_ori2l,
+                                                                mtl_out_l2ori,
+                                                                mtab_out_ab2l, mtab_out_l2ab, mtab_out_ab2ori,
+                                                                mtab_out_ori2ab,
+                                                                mtori_out_ori2l, mtori_out_l2ori, mtori_out_ab2ori,
+                                                                mtori_out_ori2ab,
+                                                                out_ab2l, out_l2ab, out_ori2l, out_l2ori, out_ab2ori,
+                                                                out_ori2ab,
+                                                                opt.margin_type)
+
+        # get meta weights
+        fast_weights = OrderedDict((name, param) for (name, param) in model.named_parameters())
+        # create_graph flag for computing second-derivative
+        grads = torch.autograd.grad(loss, model.parameters(), create_graph=True)
+        data = [p.data for p in list(model.parameters())]
+        # compute theta_1^+ by applying sgd on multi-task loss
+        fast_weights = OrderedDict((name, param - opt.bb_learning_rate * grad) for ((name, param), grad, data) in
+                                   zip(fast_weights.items(), grads, data))
+
+        # meta feat generation
+        feat_l, feat_ab, feat_ori = model(inputs, fast_weights)
+
+        mt_feat_l = l_mtgen(feat_l, False)
+        mt_feat_ab = ab_mtgen(feat_ab, False)
+        mt_feat_ori = ori_mtgen(feat_ori, False)
+
+        # ori loss calc
+        out_ab2l, out_l2ab, out_ori2l, out_l2ori, out_ab2ori, out_ori2ab = contrast(feat_l, feat_ab, feat_ori, index)
+
+        loss = criterion_gh(out_ab2l, out_l2ab, out_ori2l, out_l2ori, out_ab2ori, out_ori2ab)
+
+        # aug loss calc
+        mtl_out_ab2l, mtl_out_l2ab, mtl_out_ori2l, mtl_out_l2ori, out_ab2ori, out_ori2ab = contrast(mt_feat_l, feat_ab,
+                                                                                                    feat_ori, index,
+                                                                                                    updatemem=False)
+        loss += opt.mt_loss_hp * criterion_gh(mtl_out_ab2l, mtl_out_l2ab, mtl_out_ori2l, mtl_out_l2ori, out_ab2ori,
+                                              out_ori2ab)
+        mtab_out_ab2l, mtab_out_l2ab, out_ori2l, out_l2ori, mtab_out_ab2ori, mtab_out_ori2ab = contrast(feat_l,
+                                                                                                        mt_feat_ab,
+                                                                                                        feat_ori, index,
+                                                                                                        updatemem=False)
+        loss += opt.mt_loss_hp * criterion_gh(mtab_out_ab2l, mtab_out_l2ab, out_ori2l, out_l2ori, mtab_out_ab2ori,
+                                              mtab_out_ori2ab)
+        out_ab2l, out_l2ab, mtori_out_ori2l, mtori_out_l2ori, mtori_out_ab2ori, mtori_out_ori2ab = contrast(feat_l,
+                                                                                                            feat_ab,
+                                                                                                            mt_feat_ori,
+                                                                                                            index,
+                                                                                                            updatemem=False)
+        loss += opt.mt_loss_hp * criterion_gh(out_ab2l, out_l2ab, mtori_out_ori2l, mtori_out_l2ori, mtori_out_ab2ori,
+                                              mtori_out_ori2ab)
+        mt_out_ab2l, mt_out_l2ab, mt_out_ori2l, mt_out_l2ori, mt_out_ab2ori, mt_out_ori2ab = contrast(mt_feat_l,
+                                                                                                      mt_feat_ab,
+                                                                                                      mt_feat_ori,
+                                                                                                      index,
+                                                                                                      updatemem=False)
+        loss += opt.mt_loss_hp * criterion_gh(mt_out_ab2l, mt_out_l2ab, mt_out_ori2l, mt_out_l2ori, mt_out_ab2ori,
+                                              mt_out_ori2ab)
+
+        # margin-injection
+        if opt.margin_injection == 1:
+            loss += opt.mj_loss_hp * margin_injection_loss_calc(mtl_out_ab2l, mtl_out_l2ab, mtl_out_ori2l,
+                                                                mtl_out_l2ori,
+                                                                mtab_out_ab2l, mtab_out_l2ab, mtab_out_ab2ori,
+                                                                mtab_out_ori2ab,
+                                                                mtori_out_ori2l, mtori_out_l2ori, mtori_out_ab2ori,
+                                                                mtori_out_ori2ab,
+                                                                out_ab2l, out_l2ab, out_ori2l, out_l2ori, out_ab2ori,
+                                                                out_ori2ab,
+                                                                opt.margin_type)
 
         feat_l, feat_ab, feat_ori = model(inputs, False)
 
